@@ -573,6 +573,9 @@ class LitellmLLM(LLM):
         reasoning_effort_default: ReasoningEffort | None = None,
         reasoning_effort_user_default: ReasoningEffort | None = None,
         reasoning_effort_max: ReasoningEffort | None = None,
+        # Admin-declared capability (the REASONING flow); covers models the
+        # LiteLLM registry doesn't list, e.g. Ollama models.
+        supports_reasoning: bool = False,
     ):
         # No instance-level timeout: invoke() and stream() each take their own,
         # so an instance default would be a second source of truth.
@@ -590,6 +593,7 @@ class LitellmLLM(LLM):
         self._reasoning_effort_default = reasoning_effort_default
         self._reasoning_effort_user_default = reasoning_effort_user_default
         self._reasoning_effort_max = reasoning_effort_max
+        self._supports_reasoning = supports_reasoning
 
         self._api_surface = resolve_api_surface(model_provider, custom_config)
 
@@ -770,7 +774,8 @@ class LitellmLLM(LLM):
             anthropic_supports_thinking(name) for name in model_identity_names
         )
         is_reasoning = (
-            uses_adaptive_thinking
+            self._supports_reasoning
+            or uses_adaptive_thinking
             or model_supports_anthropic_thinking
             or any(
                 model_is_reasoning_model(name, self.config.model_provider)
