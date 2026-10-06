@@ -37,6 +37,12 @@ RUN bun install --frozen-lockfile
 # pull in remaining source code
 COPY . .
 
+# INCLUDE_EE=false builds the web app with no Enterprise Edition code: the ee
+# directories are deleted here, in the builder stage, and their imports resolve
+# to the MIT stubs in src/community-stubs.
+ARG INCLUDE_EE=true
+RUN if [ "$INCLUDE_EE" = "false" ]; then node scripts/community-build.mjs; fi
+
 # needed to get the `standalone` dir we expect later
 ENV NEXT_PRIVATE_STANDALONE=true
 

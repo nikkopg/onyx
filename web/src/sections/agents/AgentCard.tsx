@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import { useMemo, useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { MinimalAgent } from "@/lib/agents/types";
@@ -93,7 +94,7 @@ export default function AgentCard({ agent, onView }: AgentCardProps) {
                           icon={SvgBarChart}
                           prominence="tertiary"
                           onClick={noProp(() =>
-                            router.push(`/ee/agents/stats/${agent.id}`)
+                            router.push(`/ee/agents/stats/${agent.id}` as Route)
                           )}
                           tooltip={t("card.viewStats.tooltip")}
                         />

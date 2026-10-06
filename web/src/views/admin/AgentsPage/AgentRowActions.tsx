@@ -1,5 +1,6 @@
 "use client";
 
+import type { Route } from "next";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import {
@@ -236,7 +237,7 @@ export default function AgentRowActions({
                       icon={SvgBarChart}
                       onClick={() => {
                         setPopoverOpen(false);
-                        router.push(`/ee/agents/stats/${agent.id}`);
+                        router.push(`/ee/agents/stats/${agent.id}` as Route);
                       }}
                       title={t("rowActions.statsItem.title")}
                     />
