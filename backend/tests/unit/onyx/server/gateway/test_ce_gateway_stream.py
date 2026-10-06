@@ -1,3 +1,4 @@
+import contextvars
 import json
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -175,9 +176,10 @@ def test_stream_rate_limit_error_type() -> None:
     assert frames[0]["error"]["type"] == "rate_limited"
 
 
-def test_stream_can_be_consumed_from_different_threads() -> None:
-    """StreamingResponse may pull each frame on a different worker thread; the
-    generation span must not be entered and exited across those contexts."""
+def test_each_event_can_be_pulled_in_a_fresh_context() -> None:
+    """The response pulls each event with its own copy of the context. The
+    trace and span must still open and close in one context, or exiting them
+    raises "created in a different Context"."""
     chunks = [_chunk(Delta(content="a")), _chunk(Delta(content="b"), "stop")]
 
     def fake_stream(*_args: Any, **_kwargs: Any) -> Iterator[ModelResponseStream]:
@@ -194,11 +196,17 @@ def test_stream_can_be_consumed_from_different_threads() -> None:
         received: list[str] = []
         with ThreadPoolExecutor(max_workers=4) as pool:
             while True:
-                frame = pool.submit(next, generator, None).result()
+                fresh = contextvars.copy_context()
+
+                def pull(context: contextvars.Context = fresh) -> str | None:
+                    return context.run(next, generator, None)
+
+                frame = pool.submit(pull).result()
                 if frame is None:
                     break
                 received.append(frame)
 
+    assert all("error" not in frame for frame in received)
     assert received[-1] == "data: [DONE]\n\n"
     assert len(received) == 3
 

@@ -5,9 +5,8 @@ OpenCode agent calls. Registered only when the Enterprise Edition is off,
 since the Enterprise app serves its own gateway at the same prefix.
 """
 
+import contextvars
 import json
-import queue
-import threading
 import time
 from collections.abc import Generator
 from typing import Any
@@ -54,16 +53,10 @@ from onyx.tracing.llm_utils import (
     record_llm_span_output,
 )
 from onyx.utils.logger import setup_logger
-from onyx.utils.threadpool_concurrency import run_in_background
 
 logger = setup_logger()
 
 router = APIRouter(prefix=GATEWAY_PATH_PREFIX)
-
-# Frames buffered between the LLM thread and the response; a slow client
-# makes the LLM thread wait instead of growing memory.
-_MAX_BUFFERED_FRAMES = 64
-_FRAME_PUT_POLL_SECONDS = 1.0
 
 
 def _resolve_model(
@@ -93,6 +86,10 @@ def _resolve_model(
     )
 
 
+def _sse(payload: dict[str, Any]) -> str:
+    return f"data: {json.dumps(payload)}\n\n"
+
+
 def _client_error(error: Exception, llm: LitellmLLM) -> tuple[str, str]:
     """``(message, code)`` safe to show the caller. Uses the same mapping as
     chat, so connection details stay in the server log."""
@@ -115,35 +112,18 @@ def _error_frame(error: Exception, llm: LitellmLLM) -> str:
     else:
         kind = "provider_error"
     message, code = _client_error(error, llm)
-    payload = {"error": {"message": message, "type": kind, "code": code}}
-    return f"data: {json.dumps(payload)}\n\n"
+    return _sse({"error": {"message": message, "type": kind, "code": code}})
 
 
-def _offer(
-    frames: "queue.Queue[str | None]", item: str | None, cancelled: threading.Event
-) -> bool:
-    """Waits for room in the buffer; False when the client has gone."""
-    while not cancelled.is_set():
-        try:
-            frames.put(item, timeout=_FRAME_PUT_POLL_SECONDS)
-            return True
-        except queue.Full:
-            continue
-    return False
-
-
-def _produce_frames(
+def _sse_events(
     llm: LitellmLLM,
     call_args: RawLLMCallArgs,
     model_id: str,
     flow: LLMFlow,
     user_identity: LLMUserIdentity,
-    frames: "queue.Queue[str | None]",
-    cancelled: threading.Event,
-) -> None:
-    """Runs in one thread for the whole stream: the trace and the generation
-    span are contextvars and must open and close in the same context."""
-    deadline = time.monotonic() + GATEWAY_LLM_TOTAL_TIMEOUT_SECONDS
+) -> Generator[str, None, None]:
+    """Server-sent events for one streamed completion, ending with [DONE]."""
+    give_up_at = time.monotonic() + GATEWAY_LLM_TOTAL_TIMEOUT_SECONDS
     try:
         with (
             trace(
@@ -157,10 +137,10 @@ def _produce_frames(
                 tools=call_args.tools,
             ) as span,
         ):
-            content: list[str] = []
-            reasoning: list[str] = []
-            usage = None
-            sent_tool_calls = False
+            answer_text = ""
+            thinking_text = ""
+            final_usage = None
+            called_a_tool = False
             upstream = llm.stream_raw(
                 prompt=call_args.prompt,
                 tools=call_args.tools,
@@ -171,39 +151,37 @@ def _produce_frames(
                 user_identity=user_identity,
             )
             try:
-                for index, chunk in enumerate(upstream):
-                    if cancelled.is_set():
-                        return
-                    if time.monotonic() > deadline:
+                for position, chunk in enumerate(upstream):
+                    if time.monotonic() > give_up_at:
                         raise LLMTimeoutError(
                             f"Gateway total timeout of {GATEWAY_LLM_TOTAL_TIMEOUT_SECONDS}s exceeded."
                         )
-                    content.append(chunk.choice.delta.content or "")
-                    reasoning.append(chunk.choice.delta.reasoning_content or "")
-                    usage = chunk.usage or usage
-                    sent_tool_calls = sent_tool_calls or bool(
-                        chunk.choice.delta.tool_calls
-                    )
-                    wire = ChatCompletionChunk.from_stream_chunk(
-                        chunk, model=model_id, include_role=index == 0
+                    delta = chunk.choice.delta
+                    answer_text += delta.content or ""
+                    thinking_text += delta.reasoning_content or ""
+                    if chunk.usage:
+                        final_usage = chunk.usage
+                    if delta.tool_calls:
+                        called_a_tool = True
+                    event = ChatCompletionChunk.from_stream_chunk(
+                        chunk, model=model_id, include_role=position == 0
                     ).to_wire()
                     # Some providers (e.g. Ollama) end a tool-calling turn with
                     # "stop"; OpenAI clients expect "tool_calls" there.
-                    for choice in wire["choices"]:
-                        if sent_tool_calls and choice.get("finish_reason") == "stop":
+                    for choice in event["choices"]:
+                        if called_a_tool and choice.get("finish_reason") == "stop":
                             choice["finish_reason"] = "tool_calls"
-                    if not _offer(frames, f"data: {json.dumps(wire)}\n\n", cancelled):
-                        return
+                    yield _sse(event)
             finally:
-                # Closing the generator releases the provider connection now,
-                # not when it is garbage collected.
+                # Runs on client disconnect too (GeneratorExit), so the
+                # provider connection is released at once.
                 if isinstance(upstream, Generator):
                     upstream.close()
                 record_llm_span_output(
                     span,
-                    output="".join(content),
-                    usage=usage,
-                    reasoning="".join(reasoning) or None,
+                    output=answer_text,
+                    usage=final_usage,
+                    reasoning=thinking_text if thinking_text else None,
                 )
     except Exception as e:
         logger.warning(
@@ -212,10 +190,8 @@ def _produce_frames(
             type(e).__name__,
             e,
         )
-        _offer(frames, _error_frame(e, llm), cancelled)
-    finally:
-        _offer(frames, "data: [DONE]\n\n", cancelled)
-        _offer(frames, None, cancelled)
+        yield _error_frame(e, llm)
+    yield "data: [DONE]\n\n"
 
 
 def _stream_chat_completion(
@@ -225,24 +201,21 @@ def _stream_chat_completion(
     flow: LLMFlow,
     user_identity: LLMUserIdentity,
 ) -> Generator[str, None, None]:
-    frames: queue.Queue[str | None] = queue.Queue(maxsize=_MAX_BUFFERED_FRAMES)
-    cancelled = threading.Event()
-    run_in_background(
-        _produce_frames,
-        llm,
-        call_args,
-        model_id,
-        flow,
-        user_identity,
-        frames,
-        cancelled,
-    )
+    """The response may pull each event on a different worker thread, each
+    with its own copy of the context. The trace and span are context
+    variables, so every step of ``_sse_events`` runs inside one saved
+    context; their enter and exit then always see the same context."""
+    saved_context = contextvars.copy_context()
+    events = _sse_events(llm, call_args, model_id, flow, user_identity)
     try:
-        while (frame := frames.get()) is not None:
-            yield frame
+        while True:
+            try:
+                event = saved_context.run(next, events)
+            except StopIteration:
+                return
+            yield event
     finally:
-        # Stops the producer at its next chunk when the client disconnects.
-        cancelled.set()
+        saved_context.run(events.close)
 
 
 @router.post("/v1/chat/completions")
