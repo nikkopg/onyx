@@ -112,6 +112,10 @@ RUN --mount=type=secret,id=sentry_auth_token \
 # package manager, so keep this stage free of RUN instructions.
 FROM ${NODE_RUNTIME_IMAGE} AS runner
 
+# Records whether this image was built with the Enterprise Edition code.
+ARG INCLUDE_EE=true
+LABEL com.onyx.include-ee="${INCLUDE_EE}"
+
 LABEL com.onyx.maintainer="founders@onyx.app"
 LABEL com.onyx.description="This image is the web/frontend container of Onyx which \
 contains code for both the Community and Enterprise editions of Onyx. If you do not \

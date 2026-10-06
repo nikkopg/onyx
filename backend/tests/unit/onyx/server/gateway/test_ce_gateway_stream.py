@@ -154,7 +154,7 @@ def test_stream_error_does_not_leak_upstream_details() -> None:
         model="gemma4:31b-cloud",
     )
     frames = _frames(error)
-    assert frames[0]["error"]["type"] == "upstream_error"
+    assert frames[0]["error"]["type"] == "provider_error"
     assert frames[0]["error"]["code"] == "CONNECTION_ERROR"
     assert "internal-llm.corp" not in frames[0]["error"]["message"]
     assert frames[-1] == "[DONE]"
@@ -172,7 +172,7 @@ def test_stream_error_before_first_chunk_still_ends_stream() -> None:
 
 def test_stream_rate_limit_error_type() -> None:
     frames = _frames(LLMRateLimitError("slow down"))
-    assert frames[0]["error"]["type"] == "rate_limit_error"
+    assert frames[0]["error"]["type"] == "rate_limited"
 
 
 def test_stream_can_be_consumed_from_different_threads() -> None:
@@ -301,3 +301,28 @@ def test_route_uses_provider_with_api_key_and_releases_session() -> None:
 def test_route_rejects_provider_lost_between_lookups() -> None:
     with pytest.raises(OnyxError):
         _call_route(None)
+
+
+def test_client_disconnect_closes_the_provider_stream() -> None:
+    import threading
+
+    closed = threading.Event()
+
+    def endless_stream(*_args: Any, **_kwargs: Any) -> Iterator[ModelResponseStream]:
+        try:
+            while True:
+                yield _chunk(Delta(content="x"))
+        finally:
+            closed.set()
+
+    with patch.object(LitellmLLM, "stream_raw", side_effect=endless_stream):
+        generator = _stream_chat_completion(
+            _llm(),
+            _call_args(),
+            "1/gemma4:31b-cloud",
+            LLMFlow.CRAFT_LLM_GENERATION,
+            LLMUserIdentity(user_id="u"),
+        )
+        assert next(generator).startswith("data: ")
+        generator.close()
+        assert closed.wait(timeout=10)

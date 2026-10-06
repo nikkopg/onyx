@@ -9,7 +9,7 @@ import json
 import queue
 import threading
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from typing import Any
 
 from fastapi import APIRouter, Depends, Request
@@ -48,7 +48,6 @@ from onyx.server.manage.llm.models import LLMProviderView
 from onyx.server.query_and_chat.token_limit import check_token_rate_limits
 from onyx.tracing.flows import LLMFlow
 from onyx.tracing.framework.create import trace
-from onyx.tracing.framework.traces import Trace
 from onyx.tracing.llm_utils import (
     llm_generation_span,
     record_llm_response,
@@ -60,6 +59,11 @@ from onyx.utils.threadpool_concurrency import run_in_background
 logger = setup_logger()
 
 router = APIRouter(prefix=GATEWAY_PATH_PREFIX)
+
+# Frames buffered between the LLM thread and the response; a slow client
+# makes the LLM thread wait instead of growing memory.
+_MAX_BUFFERED_FRAMES = 64
+_FRAME_PUT_POLL_SECONDS = 1.0
 
 
 def _resolve_model(
@@ -102,20 +106,30 @@ def _client_error(error: Exception, llm: LitellmLLM) -> tuple[str, str]:
 
 
 def _error_frame(error: Exception, llm: LitellmLLM) -> str:
-    """OpenAI-style in-band error."""
+    """In-band error event; the stream cannot change its HTTP status once
+    the first frame is sent."""
     if isinstance(error, LLMRateLimitError):
-        error_type = "rate_limit_error"
+        kind = "rate_limited"
     elif isinstance(error, LLMTimeoutError):
-        error_type = "timeout_error"
+        kind = "timeout"
     else:
-        error_type = "upstream_error"
+        kind = "provider_error"
     message, code = _client_error(error, llm)
-    payload = {"error": {"message": message, "type": error_type, "code": code}}
+    payload = {"error": {"message": message, "type": kind, "code": code}}
     return f"data: {json.dumps(payload)}\n\n"
 
 
-def _gateway_trace(flow: LLMFlow, model_id: str) -> Trace:
-    return trace("llm_gateway", metadata={"flow": flow.value, "model": model_id})
+def _offer(
+    frames: "queue.Queue[str | None]", item: str | None, cancelled: threading.Event
+) -> bool:
+    """Waits for room in the buffer; False when the client has gone."""
+    while not cancelled.is_set():
+        try:
+            frames.put(item, timeout=_FRAME_PUT_POLL_SECONDS)
+            return True
+        except queue.Full:
+            continue
+    return False
 
 
 def _produce_frames(
@@ -132,7 +146,10 @@ def _produce_frames(
     deadline = time.monotonic() + GATEWAY_LLM_TOTAL_TIMEOUT_SECONDS
     try:
         with (
-            _gateway_trace(flow, model_id),
+            trace(
+                "ce_chat_completions",
+                metadata={"llm_flow": flow.value, "requested_model": model_id},
+            ),
             llm_generation_span(
                 llm=llm,
                 flow=flow,
@@ -144,18 +161,17 @@ def _produce_frames(
             reasoning: list[str] = []
             usage = None
             sent_tool_calls = False
+            upstream = llm.stream_raw(
+                prompt=call_args.prompt,
+                tools=call_args.tools,
+                tool_choice=call_args.tool_choice,
+                structured_response_format=call_args.structured_response_format,
+                max_tokens=call_args.max_tokens,
+                reasoning_effort=call_args.reasoning_effort,
+                user_identity=user_identity,
+            )
             try:
-                for index, chunk in enumerate(
-                    llm.stream_raw(
-                        prompt=call_args.prompt,
-                        tools=call_args.tools,
-                        tool_choice=call_args.tool_choice,
-                        structured_response_format=call_args.structured_response_format,
-                        max_tokens=call_args.max_tokens,
-                        reasoning_effort=call_args.reasoning_effort,
-                        user_identity=user_identity,
-                    )
-                ):
+                for index, chunk in enumerate(upstream):
                     if cancelled.is_set():
                         return
                     if time.monotonic() > deadline:
@@ -176,8 +192,13 @@ def _produce_frames(
                     for choice in wire["choices"]:
                         if sent_tool_calls and choice.get("finish_reason") == "stop":
                             choice["finish_reason"] = "tool_calls"
-                    frames.put(f"data: {json.dumps(wire)}\n\n")
+                    if not _offer(frames, f"data: {json.dumps(wire)}\n\n", cancelled):
+                        return
             finally:
+                # Closing the generator releases the provider connection now,
+                # not when it is garbage collected.
+                if isinstance(upstream, Generator):
+                    upstream.close()
                 record_llm_span_output(
                     span,
                     output="".join(content),
@@ -191,10 +212,10 @@ def _produce_frames(
             type(e).__name__,
             e,
         )
-        frames.put(_error_frame(e, llm))
+        _offer(frames, _error_frame(e, llm), cancelled)
     finally:
-        frames.put("data: [DONE]\n\n")
-        frames.put(None)
+        _offer(frames, "data: [DONE]\n\n", cancelled)
+        _offer(frames, None, cancelled)
 
 
 def _stream_chat_completion(
@@ -203,8 +224,8 @@ def _stream_chat_completion(
     model_id: str,
     flow: LLMFlow,
     user_identity: LLMUserIdentity,
-) -> Iterator[str]:
-    frames: queue.Queue[str | None] = queue.Queue()
+) -> Generator[str, None, None]:
+    frames: queue.Queue[str | None] = queue.Queue(maxsize=_MAX_BUFFERED_FRAMES)
     cancelled = threading.Event()
     run_in_background(
         _produce_frames,
@@ -273,7 +294,10 @@ def create_chat_completion(
         )
 
     with (
-        _gateway_trace(flow, chat_request.model),
+        trace(
+            "ce_chat_completions",
+            metadata={"llm_flow": flow.value, "requested_model": chat_request.model},
+        ),
         llm_generation_span(
             llm=llm, flow=flow, input_messages=call_args.prompt, tools=call_args.tools
         ) as span,

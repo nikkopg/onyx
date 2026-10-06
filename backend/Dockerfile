@@ -112,6 +112,10 @@ RUN mkdir /out && \
 
 FROM os AS runtime
 
+# Records whether this image was built with the Enterprise Edition code.
+ARG INCLUDE_EE=true
+LABEL com.onyx.include-ee="${INCLUDE_EE}"
+
 LABEL com.danswer.maintainer="founders@onyx.app"
 LABEL com.danswer.description="This image is the web/frontend container of Onyx which \
 contains code for both the Community and Enterprise editions of Onyx. If you do not \
