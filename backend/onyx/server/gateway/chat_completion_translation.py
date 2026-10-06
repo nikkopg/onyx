@@ -84,6 +84,8 @@ def _user_content(content: Any) -> str | list[ContentPart]:
             if not isinstance(url, str) or not url:
                 raise _invalid("An image_url part needs a url.")
             detail = image_url.get("detail") if isinstance(image_url, dict) else None
+            if detail not in (None, "auto", "low", "high"):
+                raise _invalid(f"Unsupported image detail: {detail}.")
             parts.append(
                 ImageContentPart(image_url=ImageUrlDetail(url=url, detail=detail))
             )

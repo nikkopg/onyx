@@ -46,7 +46,7 @@ _LICENSE_ENFORCEMENT_ENABLED = (
 _LICENSE_ENFORCEMENT_SET_EXPLICITLY = "LICENSE_ENFORCEMENT_ENABLED" in os.environ
 
 
-def _ee_code_available() -> bool:
+def ee_code_available() -> bool:
     """False in images built with INCLUDE_EE=false, which ship no ``ee`` package."""
     try:
         return importlib.util.find_spec("ee.onyx") is not None
@@ -68,7 +68,7 @@ def set_is_ee_based_on_env_variable() -> None:
         return
 
     if (ENTERPRISE_EDITION_ENABLED or _LICENSE_ENFORCEMENT_ENABLED) and (
-        not _ee_code_available()
+        not ee_code_available()
     ):
         # An explicit request for EE must not silently fall back to the
         # Community Edition; the default license-enforcement value may.

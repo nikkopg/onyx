@@ -145,10 +145,28 @@ def test_stop_without_tool_calls_stays_stop() -> None:
     assert frames[0]["choices"][0]["finish_reason"] == "stop"
 
 
-def test_stream_error_keeps_upstream_message() -> None:
-    frames = _frames(Exception("402 Prompt tokens limit exceeded"))
+def test_stream_error_does_not_leak_upstream_details() -> None:
+    from litellm.exceptions import APIConnectionError
+
+    error = APIConnectionError(
+        message="Cannot connect to host internal-llm.corp:11434",
+        llm_provider="ollama_chat",
+        model="gemma4:31b-cloud",
+    )
+    frames = _frames(error)
     assert frames[0]["error"]["type"] == "upstream_error"
-    assert "402 Prompt tokens limit exceeded" in frames[0]["error"]["message"]
+    assert frames[0]["error"]["code"] == "CONNECTION_ERROR"
+    assert "internal-llm.corp" not in frames[0]["error"]["message"]
+    assert frames[-1] == "[DONE]"
+
+
+def test_stream_error_before_first_chunk_still_ends_stream() -> None:
+    with patch(
+        "onyx.server.gateway.api.llm_generation_span",
+        side_effect=RuntimeError("span setup failed"),
+    ):
+        frames = _frames([_chunk(Delta(content="never sent"))])
+    assert "error" in frames[0]
     assert frames[-1] == "[DONE]"
 
 
@@ -225,3 +243,61 @@ def test_resolve_model_rejects_unknown_or_hidden(model_id: str) -> None:
     )
     with pytest.raises(OnyxError):
         _resolve_model(model_id, [provider])
+
+
+def _route_mocks(provider_with_key: LLMProviderView | None) -> dict[str, Any]:
+    return {
+        "gateway_request_flow": LLMFlow.CRAFT_LLM_GENERATION,
+        "check_token_rate_limits": None,
+        "fetch_all_accessible_llm_providers": [_provider([_model("gemma4:31b-cloud")])],
+        "fetch_accessible_llm_provider_by_id": provider_with_key,
+    }
+
+
+def _call_route(provider_with_key: LLMProviderView | None) -> tuple[Any, Any]:
+    from unittest.mock import MagicMock
+
+    from onyx.server.gateway import api
+    from onyx.server.gateway.models import ChatCompletionRequest
+
+    session = MagicMock()
+    user = MagicMock()
+    user.id = "u"
+    patches = [
+        patch.object(api, name, return_value=value)
+        for name, value in _route_mocks(provider_with_key).items()
+    ]
+    for p in patches:
+        p.start()
+    try:
+        with patch.object(api, "llm_from_provider", return_value=_llm()) as factory:
+            response = api.create_chat_completion(
+                ChatCompletionRequest(
+                    model="1/gemma4:31b-cloud",
+                    messages=[{"role": "user", "content": "hi"}],
+                    stream=True,
+                    temperature=0.2,
+                ),
+                MagicMock(),
+                user,
+                session,
+            )
+            return response, (factory, session)
+    finally:
+        for p in patches:
+            p.stop()
+
+
+def test_route_uses_provider_with_api_key_and_releases_session() -> None:
+    keyed = _provider([_model("gemma4:31b-cloud")]).model_copy(
+        update={"api_key": "sk-real"}
+    )
+    _, (factory, session) = _call_route(keyed)
+    assert factory.call_args.kwargs["llm_provider"].api_key == "sk-real"
+    assert factory.call_args.kwargs["temperature"] == 0.2
+    session.close.assert_called()
+
+
+def test_route_rejects_provider_lost_between_lookups() -> None:
+    with pytest.raises(OnyxError):
+        _call_route(None)

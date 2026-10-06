@@ -24,7 +24,7 @@ print("community")
 
 
 def _run_without_ee(
-    tmp_path: Path, env_overrides: dict[str, str]
+    tmp_path: Path, env_overrides: dict[str, str], script: str = _SCRIPT
 ) -> subprocess.CompletedProcess[str]:
     for package in ("onyx", "shared_configs"):
         (tmp_path / package).symlink_to(BACKEND_DIR / package)
@@ -40,7 +40,7 @@ def _run_without_ee(
     env.update(env_overrides)
     env["PYTHONPATH"] = str(tmp_path)
     return subprocess.run(
-        [sys.executable, "-c", _SCRIPT],
+        [sys.executable, "-c", script],
         cwd=tmp_path,
         env=env,
         capture_output=True,
@@ -80,3 +80,15 @@ def test_explicit_ee_request_fails_without_ee_code(
     result = _run_without_ee(tmp_path, env_overrides)
     assert result.returncode != 0
     assert "this build has no Enterprise Edition code" in result.stderr
+
+
+def test_beat_skips_ee_tasks_without_ee_code(tmp_path: Path) -> None:
+    script = (
+        "from onyx.background.celery.tasks.beat_schedule import beat_task_templates\n"
+        "names = {t['name'] for t in beat_task_templates}\n"
+        "assert 'check-for-doc-permissions-sync' not in names, names\n"
+        "print('community')\n"
+    )
+    result = _run_without_ee(tmp_path, {}, script)
+    assert result.returncode == 0, result.stderr
+    assert "community" in result.stdout

@@ -137,16 +137,39 @@ def test_reasoning_effort() -> None:
 def test_request_options_are_carried_over() -> None:
     tools = [{"type": "function", "function": {"name": "t", "parameters": {}}}]
     call_args = translate_chat_completion_request(
-        ChatCompletionRequest(
-            model="1/gemma4:31b-cloud",
-            messages=[{"role": "user", "content": "hi"}],
-            tools=tools,
-            max_tokens=100,
-            max_completion_tokens=50,
-            reasoning_effort="medium",
-            reasoningSummary="auto",  # unknown opencode field, accepted and ignored
+        ChatCompletionRequest.model_validate(
+            {
+                "model": "1/gemma4:31b-cloud",
+                "messages": [{"role": "user", "content": "hi"}],
+                "tools": tools,
+                "max_tokens": 100,
+                "max_completion_tokens": 50,
+                "reasoning_effort": "medium",
+                # unknown opencode field, accepted and ignored
+                "reasoningSummary": "auto",
+            }
         )
     )
     assert call_args.tools == tools
     assert call_args.max_tokens == 50
     assert call_args.reasoning_effort == ReasoningEffort.MEDIUM
+
+
+def test_unknown_image_detail_is_rejected_as_invalid_input() -> None:
+    from onyx.error_handling.exceptions import OnyxError
+    from onyx.server.gateway.chat_completion_translation import translate_messages
+
+    with pytest.raises(OnyxError):
+        translate_messages(
+            [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": "data:,", "detail": "original"},
+                        }
+                    ],
+                }
+            ]
+        )
