@@ -11,6 +11,8 @@ class GoogleDriveConnectorConfig(ConnectorConfig):
     shared_folder_urls: str | None = None
     specific_user_emails: str | None = None
     exclude_domain_link_only: bool = False
+    exclude_folder_urls: str | None = None
+    exclude_file_patterns: str | None = None
     batch_size: int = INDEX_BATCH_SIZE
     # Deprecated: kept so stored legacy configs still validate.
     folder_paths: list[str] | None = None

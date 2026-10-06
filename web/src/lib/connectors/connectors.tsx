@@ -657,6 +657,26 @@ export const connectorConfigs: Record<
         optional: true,
         default: false,
       },
+      {
+        type: "text",
+        description:
+          "Enter a comma separated list of folder URLs to skip. Onyx does not index these folders or their subfolders. This applies to folders found through Folder URLs.",
+        label: "Excluded Folder URLs",
+        name: "exclude_folder_urls",
+        optional: true,
+        default: "",
+        isTextArea: true,
+      },
+      {
+        type: "text",
+        description:
+          "Enter a comma separated list of file name patterns to skip, for example: log_*.csv, *.log. Matching ignores case.",
+        label: "Excluded File Name Patterns",
+        name: "exclude_file_patterns",
+        optional: true,
+        default: "",
+        isTextArea: true,
+      },
     ],
   },
   onedrive: buildOneDriveConfiguration(ONE_DRIVE_TRANSLATION_KEYS),

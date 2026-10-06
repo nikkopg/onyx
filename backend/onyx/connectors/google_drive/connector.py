@@ -1,4 +1,5 @@
 import copy
+import fnmatch
 import json
 import os
 import sys
@@ -284,6 +285,8 @@ class GoogleDriveConnector(
         shared_folder_urls: str | None = None,
         specific_user_emails: str | None = None,
         exclude_domain_link_only: bool = False,
+        exclude_folder_urls: str | None = None,
+        exclude_file_patterns: str | None = None,
         batch_size: int = INDEX_BATCH_SIZE,  # noqa: ARG002
         # OLD PARAMETERS
         folder_paths: list[str] | None = None,
@@ -353,6 +356,15 @@ class GoogleDriveConnector(
             specific_user_emails
         )
         self.exclude_domain_link_only = exclude_domain_link_only
+        self._excluded_folder_ids = frozenset(
+            _extract_ids_from_urls(
+                _extract_str_list_from_comma_str(exclude_folder_urls)
+            )
+        )
+        self._excluded_file_patterns = [
+            pattern.lower()
+            for pattern in _extract_str_list_from_comma_str(exclude_file_patterns)
+        ]
 
         self._primary_admin_email: str | None = None
 
@@ -1059,6 +1071,7 @@ class GoogleDriveConnector(
                     update_traversed_ids_func=self._update_traversed_parent_ids,
                     start=folder_start,
                     end=end,
+                    excluded_folder_ids=self._excluded_folder_ids,
                 )
 
             # resume from a checkpoint
@@ -1506,6 +1519,7 @@ class GoogleDriveConnector(
                 update_traversed_ids_func=self._update_traversed_parent_ids,
                 start=folder_start,
                 end=end,
+                excluded_folder_ids=self._excluded_folder_ids,
             )
 
         # resume from a checkpoint
@@ -1598,6 +1612,9 @@ class GoogleDriveConnector(
 
             if file.error is not None or not drive_file:
                 yield file
+                continue
+
+            if self._is_excluded_file_name(drive_file.get("name")):
                 continue
 
             try:
@@ -1712,6 +1729,15 @@ class GoogleDriveConnector(
             )
 
         checkpoint.completion_stage = DriveRetrievalStage.DONE
+
+    def _is_excluded_file_name(self, name: str | None) -> bool:
+        if not name or not self._excluded_file_patterns:
+            return False
+        lowered = name.lower()
+        return any(
+            fnmatch.fnmatchcase(lowered, pattern)
+            for pattern in self._excluded_file_patterns
+        )
 
     def _fetch_drive_items(
         self,

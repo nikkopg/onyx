@@ -47,6 +47,8 @@ export interface GoogleDriveConfig {
   include_my_drives?: boolean;
   my_drive_emails?: string;
   shared_folder_urls?: string;
+  exclude_folder_urls?: string;
+  exclude_file_patterns?: string;
 }
 
 export enum OneDriveScope {

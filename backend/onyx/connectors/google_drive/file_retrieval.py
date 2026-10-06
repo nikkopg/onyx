@@ -455,10 +455,15 @@ def crawl_folders_for_files(
     start: SecondsSinceUnixEpoch | None = None,
     end: SecondsSinceUnixEpoch | None = None,
     active_parent_ids: set[str] | None = None,
+    excluded_folder_ids: frozenset[str] = frozenset(),
 ) -> Iterator[RetrievedDriveFile]:
     """
     This function starts crawling from any folder. It is slower though.
+    Folders in ``excluded_folder_ids`` and everything below them are skipped.
     """
+    if parent_id in excluded_folder_ids:
+        logger.info("Skipping excluded folder: %s", parent_id)
+        return
     logger.info("Entered crawl_folders_for_files with parent_id: " + parent_id)
     if active_parent_ids is None:
         active_parent_ids = set()
@@ -531,6 +536,7 @@ def crawl_folders_for_files(
                 start=start,
                 end=end,
                 active_parent_ids=active_parent_ids,
+                excluded_folder_ids=excluded_folder_ids,
             )
     finally:
         active_parent_ids.remove(parent_id)
