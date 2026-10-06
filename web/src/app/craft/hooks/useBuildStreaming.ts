@@ -983,7 +983,9 @@ export function useBuildStreaming() {
         const turn = await createTurn(
           sessionId,
           content,
-          crypto.randomUUID(),
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Math.random().toString(36).substring(2, 15),
           controller.signal,
           model,
           attachments
