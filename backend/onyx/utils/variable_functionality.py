@@ -1,5 +1,6 @@
 import functools
 import importlib
+import importlib.util
 import inspect
 import os
 from typing import Any, TypeVar
@@ -42,6 +43,15 @@ global_version = OnyxVersion()
 _LICENSE_ENFORCEMENT_ENABLED = (
     os.environ.get("LICENSE_ENFORCEMENT_ENABLED", "true").lower() == "true"
 )
+_LICENSE_ENFORCEMENT_SET_EXPLICITLY = "LICENSE_ENFORCEMENT_ENABLED" in os.environ
+
+
+def _ee_code_available() -> bool:
+    """False in images built with INCLUDE_EE=false, which ship no ``ee`` package."""
+    try:
+        return importlib.util.find_spec("ee.onyx") is not None
+    except ModuleNotFoundError:
+        return False
 
 
 def set_is_ee_based_on_env_variable() -> None:
@@ -55,6 +65,22 @@ def set_is_ee_based_on_env_variable() -> None:
     to EE-only features is controlled by the license enforcement middleware.
     """
     if global_version.is_ee_version():
+        return
+
+    if (ENTERPRISE_EDITION_ENABLED or _LICENSE_ENFORCEMENT_ENABLED) and (
+        not _ee_code_available()
+    ):
+        # An explicit request for EE must not silently fall back to the
+        # Community Edition; the default license-enforcement value may.
+        if ENTERPRISE_EDITION_ENABLED or _LICENSE_ENFORCEMENT_SET_EXPLICITLY:
+            raise RuntimeError(
+                "Enterprise Edition is enabled (ENABLE_PAID_ENTERPRISE_EDITION_FEATURES "
+                "or LICENSE_ENFORCEMENT_ENABLED), but this build has no Enterprise "
+                "Edition code. Set both to false, or use an image built with INCLUDE_EE=true."
+            )
+        logger.notice(
+            "This build has no Enterprise Edition code; running as Community Edition."
+        )
         return
 
     if ENTERPRISE_EDITION_ENABLED:

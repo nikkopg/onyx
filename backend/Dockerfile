@@ -96,6 +96,20 @@ RUN --mount=type=bind,source=requirements/default.txt,target=/requirements.txt \
     rm -rf /var/lib/apt/lists/* && \
     apt-get clean
 
+####################################################################################################
+# Enterprise files stage
+#
+# Collects the Enterprise Edition code and the scripts that import it. With INCLUDE_EE=false the
+# output is empty, so no EE-licensed file reaches any layer of the shipped image.
+####################################################################################################
+FROM ${BASE_IMAGE_REGISTRY}/library/python:3.13-slim@sha256:7c61056e61ac89e852de05f3dc6fa51a6dd2181797bceed46aa725dd7cb2cd3b AS ee-files
+
+ARG INCLUDE_EE=true
+COPY ./ee /src/ee
+COPY ./scripts/reencrypt_secrets.py ./scripts/seed_dev_license.py /src/scripts/
+RUN mkdir /out && \
+    if [ "$INCLUDE_EE" = "true" ]; then cp -a /src/. /out/; fi
+
 FROM os AS runtime
 
 LABEL com.danswer.maintainer="founders@onyx.app"
@@ -151,8 +165,8 @@ tiktoken.get_encoding('cl100k_base')"
 # Set up application files
 WORKDIR /app
 
-# Enterprise Version Files
-COPY --chown=onyx:onyx ./ee /app/ee
+# Enterprise Version Files (empty when built with INCLUDE_EE=false)
+COPY --from=ee-files --chown=onyx:onyx /out/ /app/
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Set up application files
@@ -169,9 +183,7 @@ COPY --chown=onyx:onyx ./keys /app/keys
 COPY --chown=onyx:onyx ./scripts/debugging /app/scripts/debugging
 COPY --chown=onyx:onyx ./scripts/force_delete_connector_by_id.py /app/scripts/force_delete_connector_by_id.py
 COPY --chown=onyx:onyx ./scripts/supervisord_entrypoint.sh /app/scripts/supervisord_entrypoint.sh
-COPY --chown=onyx:onyx ./scripts/reencrypt_secrets.py /app/scripts/reencrypt_secrets.py
 COPY --chown=onyx:onyx ./scripts/rotate_llm_provider_keys.py /app/scripts/rotate_llm_provider_keys.py
-COPY --chown=onyx:onyx ./scripts/seed_dev_license.py /app/scripts/seed_dev_license.py
 RUN chmod +x /app/scripts/supervisord_entrypoint.sh
 
 # Put logo in assets
