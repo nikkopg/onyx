@@ -11,6 +11,7 @@ import Text from "@/refresh-components/texts/Text";
 import {
   updateConnectorCredentialPairName,
   updateConnectorCredentialPairProperty,
+  updateConnectorSpecificConfig,
 } from "@/lib/connector";
 import { getCredentialSpec } from "@/lib/credentials/utils";
 import { errorHandlingFetcher } from "@/lib/fetcher";
@@ -70,6 +71,7 @@ import { resolveAllErrorsForCCPair } from "@/lib/targeted_reindex";
 import { SWR_KEYS } from "@/lib/swr-keys";
 import { can } from "@/lib/permissions/resource-actions";
 import { isPermSynced } from "@/lib/connectors/accessType";
+import { ValidSources } from "@/lib/connectors/types/source";
 // synchronize these validations with the SQLAlchemy connector class until we have a
 // centralized schema for both frontend and backend
 const RefreshFrequencySchema = Yup.object().shape({
@@ -89,6 +91,20 @@ const PruneFrequencySchema = Yup.object().shape({
     )
     .required("Property value is required"),
 });
+
+const ExclusionSchema = Yup.object().shape({
+  propertyValue: Yup.string(),
+});
+
+const DRIVE_EXCLUSION_KEYS = [
+  "exclude_folder_urls",
+  "exclude_file_patterns",
+] as const;
+type DriveExclusionKey = (typeof DRIVE_EXCLUSION_KEYS)[number];
+
+function isDriveExclusionKey(key: string): key is DriveExclusionKey {
+  return (DRIVE_EXCLUSION_KEYS as readonly string[]).includes(key);
+}
 
 const ITEMS_PER_PAGE = 8;
 const PAGES_PER_BATCH = 8;
@@ -154,6 +170,8 @@ function Main({ ccPairId }: { ccPairId: number }) {
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [editingRefreshFrequency, setEditingRefreshFrequency] = useState(false);
   const [editingPruningFrequency, setEditingPruningFrequency] = useState(false);
+  const [editingExclusionKey, setEditingExclusionKey] =
+    useState<DriveExclusionKey | null>(null);
   const [showIndexAttemptErrors, setShowIndexAttemptErrors] = useState(false);
 
   const [showIsResolvingKickoffLoader, setShowIsResolvingKickoffLoader] =
@@ -344,6 +362,27 @@ function Main({ ccPairId }: { ccPairId: number }) {
     }
   };
 
+  const handleExclusionSubmit = async (
+    propertyName: string,
+    propertyValue: string
+  ) => {
+    if (!ccPair) return;
+    try {
+      const response = await updateConnectorSpecificConfig(
+        ccPair.connector,
+        ccPair.access_type,
+        { [propertyName]: propertyValue.trim() }
+      );
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      mutate(buildCCPairInfoUrl(ccPairId));
+      toast.success(t("toasts.exclusionsUpdated"));
+    } catch (error) {
+      toast.error(t("toasts.exclusionsUpdateFailed"));
+    }
+  };
+
   if (isLoadingCCPair || isLoadingIndexAttempts) {
     return <PageLoader />;
   }
@@ -411,6 +450,23 @@ function Main({ ccPairId }: { ccPairId: number }) {
           validationSchema={PruneFrequencySchema}
           onSubmit={handlePruningSubmit}
           onClose={() => setEditingPruningFrequency(false)}
+        />
+      )}
+
+      {editingExclusionKey && (
+        <EditPropertyModal
+          propertyTitle={t(`exclusionsModal.${editingExclusionKey}.title`)}
+          propertyDetails={t(
+            `exclusionsModal.${editingExclusionKey}.description`
+          )}
+          propertyName={editingExclusionKey}
+          propertyValue={String(
+            ccPair.connector.connector_specific_config[editingExclusionKey] ??
+              ""
+          )}
+          validationSchema={ExclusionSchema}
+          onSubmit={handleExclusionSubmit}
+          onClose={() => setEditingExclusionKey(null)}
         />
       )}
 
@@ -734,6 +790,17 @@ function Main({ ccPairId }: { ccPairId: number }) {
                   ccPair.connector.connector_specific_config,
                   ccPair.connector.source
                 )}
+                editableKeys={DRIVE_EXCLUSION_KEYS}
+                onEdit={
+                  ccPair.connector.source === ValidSources.GoogleDrive &&
+                  can(ccPair, "edit")
+                    ? (key) => {
+                        if (isDriveExclusionKey(key)) {
+                          setEditingExclusionKey(key);
+                        }
+                      }
+                    : undefined
+                }
               />
 
               {/* Inline file management for file connectors */}

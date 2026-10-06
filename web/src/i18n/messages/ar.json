@@ -2075,6 +2075,16 @@
         "title": "أخطاء الفهرسة",
         "unknownDocument": "غير معروف"
       },
+      "exclusionsModal": {
+        "exclude_file_patterns": {
+          "description": "Comma separated file name patterns to skip, for example: log_*.csv, *.log. Matching ignores case. Run pruning to remove files that are already indexed.",
+          "title": "Excluded File Name Patterns"
+        },
+        "exclude_folder_urls": {
+          "description": "Comma separated folder URLs to skip, with their subfolders. This applies to folders found through Folder URLs. Run pruning to remove files that are already indexed.",
+          "title": "Excluded Folder URLs"
+        }
+      },
       "fileManagement": {
         "addFilesButton": {
           "label": "إضافة ملفات"
@@ -2524,6 +2534,8 @@
         "completeReindexStarted": "بدأت إعادة الفهرسة الكاملة بنجاح",
         "completeReindexStarting": "جارٍ بدء إعادة الفهرسة الكاملة...",
         "deletionScheduleFailed": "فشلت جدولة حذف الموصل - {message}",
+        "exclusionsUpdateFailed": "Failed to update connector exclusions",
+        "exclusionsUpdated": "Connector exclusions updated successfully",
         "indexingProcessStartFailed": "فشل بدء عملية الفهرسة",
         "indexingStartFailed": "فشل بدء الفهرسة",
         "indexingStartUnexpectedError": "حدث خطأ غير متوقع أثناء محاولة بدء الفهرسة",

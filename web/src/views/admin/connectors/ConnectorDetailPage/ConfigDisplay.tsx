@@ -37,6 +37,13 @@ export function buildConfigEntries(
     return {
       base_url: obj.base_url,
     };
+  } else if (sourceType === ValidSources.GoogleDrive) {
+    // Show the exclusion settings on connectors created before they existed.
+    return {
+      ...obj,
+      exclude_folder_urls: obj.exclude_folder_urls ?? "",
+      exclude_file_patterns: obj.exclude_file_patterns ?? "",
+    };
   }
   return obj;
 }
@@ -249,9 +256,12 @@ export function AdvancedConfigDisplay({
 export function ConfigDisplay({
   configEntries,
   onEdit,
+  editableKeys,
 }: {
   configEntries: { [key: string]: string };
   onEdit?: (key: string) => void;
+  // Omit to allow editing every key.
+  editableKeys?: readonly string[];
 }) {
   const entries = Object.entries(configEntries);
 
@@ -263,7 +273,11 @@ export function ConfigDisplay({
             <ConfigItem
               label={key}
               value={value}
-              onEdit={onEdit ? () => onEdit(key) : undefined}
+              onEdit={
+                onEdit && (!editableKeys || editableKeys.includes(key))
+                  ? () => onEdit(key)
+                  : undefined
+              }
             />
           </div>
           {index < entries.length - 1 && (

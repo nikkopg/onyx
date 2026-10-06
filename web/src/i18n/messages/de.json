@@ -2075,6 +2075,16 @@
         "title": "Indizierungsfehler",
         "unknownDocument": "Unbekannt"
       },
+      "exclusionsModal": {
+        "exclude_file_patterns": {
+          "description": "Comma separated file name patterns to skip, for example: log_*.csv, *.log. Matching ignores case. Run pruning to remove files that are already indexed.",
+          "title": "Excluded File Name Patterns"
+        },
+        "exclude_folder_urls": {
+          "description": "Comma separated folder URLs to skip, with their subfolders. This applies to folders found through Folder URLs. Run pruning to remove files that are already indexed.",
+          "title": "Excluded Folder URLs"
+        }
+      },
       "fileManagement": {
         "addFilesButton": {
           "label": "Dateien hinzufügen"
@@ -2524,6 +2534,8 @@
         "completeReindexStarted": "Vollständige Neuindizierung erfolgreich gestartet",
         "completeReindexStarting": "Vollständige Neuindizierung wird gestartet...",
         "deletionScheduleFailed": "Das Löschen des Konnektors konnte nicht geplant werden - {message}",
+        "exclusionsUpdateFailed": "Failed to update connector exclusions",
+        "exclusionsUpdated": "Connector exclusions updated successfully",
         "indexingProcessStartFailed": "Der Indizierungsprozess konnte nicht gestartet werden",
         "indexingStartFailed": "Die Indizierung konnte nicht gestartet werden",
         "indexingStartUnexpectedError": "Beim Starten der Indizierung ist ein unerwarteter Fehler aufgetreten",

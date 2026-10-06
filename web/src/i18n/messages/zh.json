@@ -2075,6 +2075,16 @@
         "title": "索引错误",
         "unknownDocument": "未知"
       },
+      "exclusionsModal": {
+        "exclude_file_patterns": {
+          "description": "Comma separated file name patterns to skip, for example: log_*.csv, *.log. Matching ignores case. Run pruning to remove files that are already indexed.",
+          "title": "Excluded File Name Patterns"
+        },
+        "exclude_folder_urls": {
+          "description": "Comma separated folder URLs to skip, with their subfolders. This applies to folders found through Folder URLs. Run pruning to remove files that are already indexed.",
+          "title": "Excluded Folder URLs"
+        }
+      },
       "fileManagement": {
         "addFilesButton": {
           "label": "添加文件"
@@ -2524,6 +2534,8 @@
         "completeReindexStarted": "已成功启动完全重新索引",
         "completeReindexStarting": "正在启动完全重新索引…",
         "deletionScheduleFailed": "安排删除连接器失败 - {message}",
+        "exclusionsUpdateFailed": "Failed to update connector exclusions",
+        "exclusionsUpdated": "Connector exclusions updated successfully",
         "indexingProcessStartFailed": "启动索引进程失败",
         "indexingStartFailed": "启动索引失败",
         "indexingStartUnexpectedError": "尝试启动索引时发生意外错误",

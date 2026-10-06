@@ -86,6 +86,33 @@ export async function updateConnector<T>(
   return await response.json();
 }
 
+/** Merges `changes` into the connector-specific config and saves the connector. */
+export async function updateConnectorSpecificConfig(
+  connector: Connector<Record<string, unknown>>,
+  accessType: string,
+  changes: Record<string, string>
+): Promise<Response> {
+  return fetch(`/api/manage/admin/connector/${connector.id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: connector.name,
+      source: connector.source,
+      input_type: connector.input_type,
+      connector_specific_config: {
+        ...connector.connector_specific_config,
+        ...changes,
+      },
+      refresh_freq: connector.refresh_freq,
+      prune_freq: connector.prune_freq,
+      indexing_start: connector.indexing_start,
+      access_type: accessType,
+    }),
+  });
+}
+
 export async function deleteConnector(
   connectorId: number
 ): Promise<string | null> {
