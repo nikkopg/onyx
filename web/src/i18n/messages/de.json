@@ -12776,6 +12776,20 @@
           "summary": "Zusammenfassung",
           "trigger": "Auslöser"
         },
+        "delete": {
+          "buttonTooltip": "Transkript löschen",
+          "disabledTooltip": "Nur abgeschlossene Läufe mit Transkript können gelöscht werden.",
+          "modal": {
+            "body": "Dadurch werden das Transkript, die Dateien und die Snapshots des am {started} gestarteten Laufs gelöscht. Der Lauf bleibt im Verlauf. Dies kann nicht rückgängig gemacht werden.",
+            "confirmButton": "Löschen",
+            "deletingButton": "Wird gelöscht...",
+            "title": "Transkript dieses Laufs löschen?"
+          },
+          "toasts": {
+            "deleteFailed": "Transkript konnte nicht gelöscht werden.",
+            "deleted": "Transkript gelöscht."
+          }
+        },
         "empty": {
           "label": "Noch keine Ausführungen. Die Aufgabe erstellt bei jedem Auslösen eine, oder nutze oben „Jetzt ausführen“."
         },
@@ -12789,6 +12803,7 @@
         },
         "nonClickable": {
           "noSession": "Dieser Lauf hat noch keine Sitzung erstellt.",
+          "noTranscript": "Das Transkript dieses Laufs wurde gelöscht, oder der Lauf wurde beendet, bevor eines erstellt wurde.",
           "queued": "Dieser Lauf hat noch nicht begonnen, daher gibt es keine Sitzung zum Öffnen.",
           "skipped": "Dieser Lauf wurde übersprungen, weil ein früherer noch lief, daher wurde keine Sitzung erstellt."
         },

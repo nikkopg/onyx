@@ -12776,6 +12776,20 @@
           "summary": "Summary",
           "trigger": "Trigger"
         },
+        "delete": {
+          "buttonTooltip": "Delete transcript",
+          "disabledTooltip": "Only finished runs with a transcript can be deleted.",
+          "modal": {
+            "body": "This deletes the transcript, files, and snapshots of the run started {started}. The run stays in the history. This can't be undone.",
+            "confirmButton": "Delete",
+            "deletingButton": "Deleting...",
+            "title": "Delete this run's transcript?"
+          },
+          "toasts": {
+            "deleteFailed": "Failed to delete transcript.",
+            "deleted": "Transcript deleted."
+          }
+        },
         "empty": {
           "label": "No runs yet. The task will create one each time it fires, or use Run Now above."
         },
@@ -12789,6 +12803,7 @@
         },
         "nonClickable": {
           "noSession": "This run has not created a session yet.",
+          "noTranscript": "The transcript of this run was deleted, or the run stopped before it created one.",
           "queued": "This run hasn't started yet, so there is no session to open.",
           "skipped": "This run was skipped because a prior run was still in flight, so no session was created."
         },

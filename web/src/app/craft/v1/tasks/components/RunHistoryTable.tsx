@@ -19,11 +19,16 @@ import {
   createTableColumns,
 } from "@opal/components";
 import SvgLock from "@opal/icons/lock";
+import { SvgTrash } from "@opal/icons";
+import { ConfirmationModalLayout, toast } from "@opal/layouts";
 
 import { markdown } from "@opal/utils";
 import { toPlainString } from "@opal/components/text/InlineMarkdown";
 import { Section } from "@/layouts/general-layouts";
-import { listScheduledTaskRuns } from "@/app/craft/v1/tasks/api";
+import {
+  deleteScheduledRunSession,
+  listScheduledTaskRuns,
+} from "@/app/craft/v1/tasks/api";
 import { RunStatusBadge } from "@/app/craft/v1/tasks/components/StatusBadge";
 import {
   buildSessionPath,
@@ -34,6 +39,7 @@ import type {
   ScheduledRunSummary,
 } from "@/app/craft/v1/tasks/interfaces";
 import {
+  canDeleteRunSession,
   formatAbsolute,
   formatRelativeShort,
   formatRunDuration,
@@ -42,6 +48,7 @@ import {
 } from "@/app/craft/v1/tasks/utils";
 import { SWR_KEYS } from "@/lib/swr-keys";
 import { errorHandlingFetcher } from "@/lib/fetcher";
+import { noProp } from "@/lib/utils";
 
 interface RunHistoryTableProps {
   taskId: string;
@@ -125,7 +132,32 @@ function SummaryCell({ row }: SummaryCellProps) {
   );
 }
 
-function buildColumns(t: RunHistoryTranslate, tReason: RunReasonTranslate) {
+interface DeleteRunCellProps {
+  row: ScheduledRunSummary;
+  onDelete: (row: ScheduledRunSummary) => void;
+}
+
+function DeleteRunCell({ row, onDelete }: DeleteRunCellProps) {
+  const t = useTranslations("craft.tasks.runHistory.delete");
+  const canDelete = canDeleteRunSession(row);
+  return (
+    <Button
+      icon={SvgTrash}
+      prominence="tertiary"
+      size="sm"
+      disabled={!canDelete}
+      tooltip={canDelete ? t("buttonTooltip") : t("disabledTooltip")}
+      // Keep the click from reaching the row, which opens the session.
+      onClick={noProp(() => onDelete(row))}
+    />
+  );
+}
+
+function buildColumns(
+  t: RunHistoryTranslate,
+  tReason: RunReasonTranslate,
+  onDelete: (row: ScheduledRunSummary) => void
+) {
   return [
     tc.column("started_at", {
       header: t("columns.started"),
@@ -194,7 +226,7 @@ function buildColumns(t: RunHistoryTranslate, tReason: RunReasonTranslate) {
     tc.displayColumn({
       id: "summary",
       header: t("columns.summary"),
-      width: { weight: 38 },
+      width: { weight: 32 },
       cell: (row) => <SummaryCell row={row} />,
     }),
     tc.column("trigger_source", {
@@ -215,6 +247,12 @@ function buildColumns(t: RunHistoryTranslate, tReason: RunReasonTranslate) {
         </NonClickableCell>
       ),
     }),
+    tc.displayColumn({
+      id: "actions",
+      header: "",
+      width: { weight: 6 },
+      cell: (row) => <DeleteRunCell row={row} onDelete={onDelete} />,
+    }),
   ];
 }
 
@@ -224,6 +262,9 @@ export default function RunHistoryTable({ taskId }: RunHistoryTableProps) {
   const [olderPages, setOlderPages] = useState<ScheduledRunSummary[][]>([]);
   const [olderNextCursor, setOlderNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [pendingDelete, setPendingDelete] =
+    useState<ScheduledRunSummary | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const firstPageUrl = `${SWR_KEYS.scheduledTaskRuns(
     taskId
@@ -265,7 +306,42 @@ export default function RunHistoryTable({ taskId }: RunHistoryTableProps) {
   }, [mutate]);
 
   const tReason = useTranslations("craft.tasks.runHistory.nonClickable");
-  const columns = useMemo(() => buildColumns(t, tReason), [t, tReason]);
+  const columns = useMemo(
+    () => buildColumns(t, tReason, setPendingDelete),
+    [t, tReason]
+  );
+
+  const closeDeleteModal = useCallback(() => {
+    setPendingDelete(null);
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    const sessionId = pendingDelete?.session_id;
+    if (!pendingDelete || !sessionId) return;
+    const runId = pendingDelete.id;
+    setIsDeleting(true);
+    try {
+      await deleteScheduledRunSession(sessionId);
+      // Older pages are not revalidated by SWR; clear the session locally so
+      // the row shows as deleted right away.
+      setOlderPages((pages) =>
+        pages.map((page) =>
+          page.map((run) =>
+            run.id === runId ? { ...run, session_id: null } : run
+          )
+        )
+      );
+      await mutate();
+      toast.success(t("delete.toasts.deleted"));
+      setPendingDelete(null);
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : t("delete.toasts.deleteFailed")
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [pendingDelete, mutate, t]);
 
   const allRuns = useMemo(() => {
     const runs: ScheduledRunSummary[] = [];
@@ -336,6 +412,29 @@ export default function RunHistoryTable({ taskId }: RunHistoryTableProps) {
           }
         }}
       />
+      {pendingDelete && (
+        <ConfirmationModalLayout
+          icon={SvgTrash}
+          title={t("delete.modal.title")}
+          description={t("delete.modal.body", {
+            started: formatAbsolute(pendingDelete.started_at),
+          })}
+          onClose={isDeleting ? undefined : closeDeleteModal}
+          submit={
+            <Button
+              variant="danger"
+              prominence="primary"
+              disabled={isDeleting}
+              icon={isDeleting ? IconLoader : undefined}
+              onClick={() => void confirmDelete()}
+            >
+              {isDeleting
+                ? t("delete.modal.deletingButton")
+                : t("delete.modal.confirmButton")}
+            </Button>
+          }
+        />
+      )}
       {loadMoreCursor && (
         <div className="flex justify-center pt-2">
           <Button

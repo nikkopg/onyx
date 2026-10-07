@@ -56,23 +56,23 @@ export function formatRunDuration(
  * or `null` when the row is clickable.
  *
  * A row is clickable once there is a session to open. Queued rows have not
- * created one yet; skipped rows deliberately never create one.
+ * created one yet; skipped rows deliberately never create one. Finished rows
+ * without a session had theirs deleted, or failed before creating one.
  */
 export type RunReasonTranslate = (
-  key: "noSession" | "queued" | "skipped"
+  key: "noSession" | "noTranscript" | "queued" | "skipped"
 ) => string;
 
 export function getNonClickableReason(
   run: ScheduledRunSummary,
   t: RunReasonTranslate
 ): string | null {
-  if (
-    run.status === "RUNNING" ||
-    run.status === "AWAITING_APPROVAL" ||
-    run.status === "SUCCEEDED" ||
-    run.status === "FAILED"
-  ) {
+  if (run.status === "RUNNING" || run.status === "AWAITING_APPROVAL") {
     return run.session_id ? null : t("noSession");
+  }
+
+  if (run.status === "SUCCEEDED" || run.status === "FAILED") {
+    return run.session_id ? null : t("noTranscript");
   }
 
   switch (run.status) {
@@ -82,6 +82,18 @@ export function getNonClickableReason(
       return t("skipped");
   }
   return null;
+}
+
+/**
+ * Whether the run's session (transcript, workspace, snapshots) can be deleted
+ * from the run history. Only finished runs qualify, so an in-flight run never
+ * loses its session.
+ */
+export function canDeleteRunSession(run: ScheduledRunSummary): boolean {
+  return (
+    (run.status === "SUCCEEDED" || run.status === "FAILED") &&
+    run.session_id !== null
+  );
 }
 
 export function isScheduledRunInFlight(

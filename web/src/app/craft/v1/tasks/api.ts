@@ -98,3 +98,17 @@ export async function listScheduledTaskRuns(
   if (!res.ok) await readError(res, "Failed to load runs");
   return await res.json();
 }
+
+// The run row stays in the history with its session cleared, so this goes
+// through the regular session delete, which also wipes the workspace and
+// snapshots.
+export async function deleteScheduledRunSession(
+  sessionId: string
+): Promise<void> {
+  const res = await fetch(`${BUILD_API_BASE}/sessions/${sessionId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok && res.status !== 204) {
+    await readError(res, "Failed to delete run transcript");
+  }
+}

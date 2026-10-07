@@ -12776,6 +12776,20 @@
           "summary": "Resumo",
           "trigger": "Gatilho"
         },
+        "delete": {
+          "buttonTooltip": "Excluir transcrição",
+          "disabledTooltip": "Somente execuções concluídas com transcrição podem ser excluídas.",
+          "modal": {
+            "body": "Isso exclui a transcrição, os arquivos e os snapshots da execução iniciada {started}. A execução permanece no histórico. Esta ação não pode ser desfeita.",
+            "confirmButton": "Excluir",
+            "deletingButton": "Excluindo...",
+            "title": "Excluir a transcrição desta execução?"
+          },
+          "toasts": {
+            "deleteFailed": "Falha ao excluir a transcrição.",
+            "deleted": "Transcrição excluída."
+          }
+        },
         "empty": {
           "label": "Nenhuma execução ainda. A tarefa criará uma cada vez que disparar, ou use Executar agora acima."
         },
@@ -12789,6 +12803,7 @@
         },
         "nonClickable": {
           "noSession": "Esta execução ainda não criou uma sessão.",
+          "noTranscript": "A transcrição desta execução foi excluída, ou a execução parou antes de criar uma.",
           "queued": "Esta execução ainda não começou, então não há sessão para abrir.",
           "skipped": "Esta execução foi ignorada porque uma anterior ainda estava em andamento, então nenhuma sessão foi criada."
         },

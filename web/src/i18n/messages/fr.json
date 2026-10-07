@@ -12776,6 +12776,20 @@
           "summary": "Résumé",
           "trigger": "Déclencheur"
         },
+        "delete": {
+          "buttonTooltip": "Supprimer la transcription",
+          "disabledTooltip": "Seules les exécutions terminées avec une transcription peuvent être supprimées.",
+          "modal": {
+            "body": "Cela supprime la transcription, les fichiers et les instantanés de l'exécution lancée {started}. L'exécution reste dans l'historique. Cette action est irréversible.",
+            "confirmButton": "Supprimer",
+            "deletingButton": "Suppression...",
+            "title": "Supprimer la transcription de cette exécution ?"
+          },
+          "toasts": {
+            "deleteFailed": "Échec de la suppression de la transcription.",
+            "deleted": "Transcription supprimée."
+          }
+        },
         "empty": {
           "label": "Aucune exécution pour le moment. La tâche en créera une à chaque déclenchement, ou utilisez Exécuter maintenant ci-dessus."
         },
@@ -12789,6 +12803,7 @@
         },
         "nonClickable": {
           "noSession": "Cette exécution n'a pas encore créé de session.",
+          "noTranscript": "La transcription de cette exécution a été supprimée, ou l'exécution s'est arrêtée avant d'en créer une.",
           "queued": "Cette exécution n'a pas encore commencé, il n'y a donc pas de session à ouvrir.",
           "skipped": "Cette exécution a été ignorée car une précédente était encore en cours, aucune session n'a donc été créée."
         },

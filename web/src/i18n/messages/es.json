@@ -12776,6 +12776,20 @@
           "summary": "Resumen",
           "trigger": "Origen"
         },
+        "delete": {
+          "buttonTooltip": "Eliminar transcripción",
+          "disabledTooltip": "Solo se pueden eliminar ejecuciones finalizadas con transcripción.",
+          "modal": {
+            "body": "Esto elimina la transcripción, los archivos y las instantáneas de la ejecución iniciada {started}. La ejecución permanece en el historial. Esta acción no se puede deshacer.",
+            "confirmButton": "Eliminar",
+            "deletingButton": "Eliminando...",
+            "title": "¿Eliminar la transcripción de esta ejecución?"
+          },
+          "toasts": {
+            "deleteFailed": "No se pudo eliminar la transcripción.",
+            "deleted": "Transcripción eliminada."
+          }
+        },
         "empty": {
           "label": "Aún no hay ejecuciones. La tarea creará una cada vez que se dispare, o usa Ejecutar ahora arriba."
         },
@@ -12789,6 +12803,7 @@
         },
         "nonClickable": {
           "noSession": "Esta ejecución aún no ha creado una sesión.",
+          "noTranscript": "La transcripción de esta ejecución se eliminó, o la ejecución se detuvo antes de crear una.",
           "queued": "Esta ejecución aún no ha comenzado, así que no hay sesión que abrir.",
           "skipped": "Esta ejecución se omitió porque una anterior seguía en curso, así que no se creó ninguna sesión."
         },

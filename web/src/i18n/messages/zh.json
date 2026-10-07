@@ -12776,6 +12776,20 @@
           "summary": "摘要",
           "trigger": "触发方式"
         },
+        "delete": {
+          "buttonTooltip": "删除记录",
+          "disabledTooltip": "只能删除已完成且有记录的运行。",
+          "modal": {
+            "body": "这将删除于 {started} 开始的运行的记录、文件和快照。该运行仍保留在历史中。此操作无法撤销。",
+            "confirmButton": "删除",
+            "deletingButton": "正在删除...",
+            "title": "删除此运行的记录？"
+          },
+          "toasts": {
+            "deleteFailed": "删除记录失败。",
+            "deleted": "记录已删除。"
+          }
+        },
         "empty": {
           "label": "尚无运行记录。任务每次触发都会创建一条，也可以使用上方的“立即运行”。"
         },
@@ -12789,6 +12803,7 @@
         },
         "nonClickable": {
           "noSession": "此运行尚未创建会话。",
+          "noTranscript": "此运行的记录已被删除，或运行在创建记录之前已停止。",
           "queued": "此运行尚未开始，因此没有可打开的会话。",
           "skipped": "由于先前的运行仍在进行中，此运行被跳过，因此未创建会话。"
         },

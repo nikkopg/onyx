@@ -1,5 +1,6 @@
 import { type RunReasonTranslate } from "@/app/craft/v1/tasks/utils";
 import {
+  canDeleteRunSession,
   getNonClickableReason,
   isScheduledRunContextInFlight,
 } from "@/app/craft/v1/tasks/utils";
@@ -56,6 +57,29 @@ describe("scheduled task run utils", () => {
     expect(getNonClickableReason(run("RUNNING", null), tStub)).toBe(
       "noSession"
     );
+  });
+
+  it("explains finished runs whose session is gone", () => {
+    expect(getNonClickableReason(run("SUCCEEDED", null), tStub)).toBe(
+      "noTranscript"
+    );
+    expect(getNonClickableReason(run("FAILED", null), tStub)).toBe(
+      "noTranscript"
+    );
+  });
+
+  it("allows deleting the session only for finished runs that have one", () => {
+    expect(canDeleteRunSession(run("SUCCEEDED", "session-1"))).toBe(true);
+    expect(canDeleteRunSession(run("FAILED", "session-1"))).toBe(true);
+    expect(canDeleteRunSession(run("SUCCEEDED", null))).toBe(false);
+    for (const status of [
+      "QUEUED",
+      "RUNNING",
+      "AWAITING_APPROVAL",
+      "SKIPPED",
+    ] as const) {
+      expect(canDeleteRunSession(run(status, "session-1"))).toBe(false);
+    }
   });
 
   it("treats only running and awaiting-approval contexts as in-flight", () => {
